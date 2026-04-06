@@ -3,66 +3,74 @@
 Simplified route generation script that generates routes with pose information
 without relying on OSMnx (which was causing network timeouts).
 """
+
 import os
 import sys
-sys.path.append('src')
+
+import pandas as pd
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from robot_route_generation import (
-    load_waypoints, get_point_by_id, generate_robot_route, 
-    add_pose_data, export_pose_route_csv
+    add_pose_data,
+    export_pose_route_csv,
+    generate_robot_route,
+    get_point_by_id,
+    load_waypoints,
 )
+
 
 def main():
     print("=== Georoute Planner with Pose Information ===")
-    
+
     # 1. Load the waypoints
     poi_geojson = load_waypoints()
-    
+
     # 2. Define the route
     route_ids = ["water_1", "arbustivo_2", "water_2"]
     robot_waypoints = [get_point_by_id(poi_geojson, rid) for rid in route_ids]
-    robot_waypoints = [p for p in robot_waypoints if p]
-    
+    robot_waypoints = [point for point in robot_waypoints if point]
+
     print(f"Visit order: {route_ids}")
     print(f"Waypoints: {len(robot_waypoints)}")
-    for i, wp in enumerate(robot_waypoints):
-        print(f"  {route_ids[i]}: lat={wp[0]:.6f}, lon={wp[1]:.6f}")
-    
+    for i, waypoint in enumerate(robot_waypoints):
+        print(f"  {route_ids[i]}: lat={waypoint[0]:.6f}, lon={waypoint[1]:.6f}")
+
     # 3. Generate direct route (straight-line interpolation)
     interval = 10  # 10 meters between points
     print(f"\nGenerating direct route with {interval}m intervals...")
     direct_route = generate_robot_route(robot_waypoints, interval_m=interval)
     print(f"Generated route: {len(direct_route)} points, approx {len(direct_route) * interval}m")
-    
+
     # 4. Add pose information
     print("\nAdding pose information...")
     pose_route = add_pose_data(direct_route, z_height=0.0)
     print(f"Generated poses: {len(pose_route)} points")
-    
+
     # 5. Export routes
     os.makedirs("routes", exist_ok=True)
-    
+
     # Export with pose information
-    pose_csv = "routes/robot_route_with_poses.csv" 
+    pose_csv = "routes/robot_route_with_poses.csv"
     export_pose_route_csv(pose_route, pose_csv)
-    
+
     # Export legacy format for compatibility
-    import pandas as pd
     legacy_csv = "routes/robot_route_legacy.csv"
     pd.DataFrame(direct_route, columns=["latitude", "longitude"]).to_csv(legacy_csv, index=False)
-    
-    print(f"\n=== Routes Exported ===")
+
+    print("\n=== Routes Exported ===")
     print(f"Route with poses: {pose_csv} ({len(pose_route)} points)")
     print(f"Legacy lat/lon route: {legacy_csv} ({len(direct_route)} points)")
-    
+
     # 6. Show sample pose data
-    print(f"\n=== Sample Pose Data ===")
-    for i in [0, len(pose_route)//2, -1]:  # First, middle, and last points
+    print("\n=== Sample Pose Data ===")
+    for i in [0, len(pose_route) // 2, -1]:  # First, middle, and last points
         pose = pose_route[i]
-        print(f"Point {i+1 if i >= 0 else len(pose_route)}:")
+        print(f"Point {i + 1 if i >= 0 else len(pose_route)}:")
         print(f"  x: {pose['x']:.6f}, y: {pose['y']:.6f}, z: {pose['z']:.1f}")
         print(f"  qx: {pose['qx']:.6f}, qy: {pose['qy']:.6f}, qz: {pose['qz']:.6f}, qw: {pose['qw']:.6f}")
-    
-    print("\n✅ Route generation with pose information completed successfully!")
+
+    print("\nRoute generation with pose information completed successfully!")
+
 
 if __name__ == "__main__":
     main()
