@@ -45,14 +45,19 @@ __all__ = [
 ]
 
 
-def main(filepath="data/points.geojson"):
+def main(filepath="data/points.geojson", route_ids=None):
     """Generate direct, OSM, and costmap routes and export CSV/map outputs."""
     poi_geojson = load_waypoints(filepath=filepath)
 
-    # Route order requested in the current example scenario.
-    route_ids = ["water_1", "arbustivo_2", "water_2"]
+    # Default route order used by existing examples.
+    if route_ids is None:
+        route_ids = ["water_1", "arbustivo_2", "water_2"]
+
     robot_waypoints = [get_point_by_id(poi_geojson, route_id) for route_id in route_ids]
     robot_waypoints = [point for point in robot_waypoints if point]
+
+    if not robot_waypoints:
+        raise ValueError("No valid waypoint IDs were provided in route_ids.")
 
     print(f"Visit order: {route_ids}")
     print(f"Generating routes for {len(robot_waypoints)} waypoints...")

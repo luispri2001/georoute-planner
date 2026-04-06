@@ -90,6 +90,14 @@ Run pose generation test script:
 python examples/test_poses.py
 ```
 
+Run interactive waypoint selector UI (choose visit order visually):
+
+```bash
+streamlit run examples/waypoint_selector_app.py
+```
+
+The app shows available points from GeoJSON on a map and lets you build an ordered waypoint list for route generation.
+
 ## Example Outputs
 
 Main script outputs:
