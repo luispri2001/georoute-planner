@@ -1,4 +1,5 @@
 import os
+import math
 
 import folium
 from geopy import distance
@@ -240,6 +241,98 @@ def generate_costmap_route(geojson, waypoints):
 
 
 import json
+import math
+
+def calculate_bearing(p1, p2):
+    """
+    Calculate the bearing (heading) in radians between two GPS points.
+    p1 and p2 are [lat, lon] in degrees.
+    Returns bearing in radians (-pi to pi).
+    """
+    lat1, lon1 = math.radians(p1[0]), math.radians(p1[1])
+    lat2, lon2 = math.radians(p2[0]), math.radians(p2[1])
+    
+    dlon = lon2 - lon1
+    y = math.sin(dlon) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    
+    bearing = math.atan2(y, x)
+    return bearing
+
+def yaw_to_quaternion(yaw):
+    """
+    Convert a yaw angle (heading) in radians to a quaternion.
+    Returns (qx, qy, qz, qw).
+    """
+    half_yaw = yaw / 2.0
+    qx = 0.0
+    qy = 0.0
+    qz = math.sin(half_yaw)
+    qw = math.cos(half_yaw)
+    return (qx, qy, qz, qw)
+
+def add_pose_data(route, z_height=0.0):
+    """
+    Takes a route of [lat, lon] points and adds pose information.
+    Returns list of dictionaries with full pose data.
+    """
+    if not route:
+        return []
+    
+    # Handle single point case
+    if len(route) == 1:
+        lat, lon = route[0]
+        pose = {
+            'x': lon,  # Using longitude as x coordinate
+            'y': lat,  # Using latitude as y coordinate  
+            'z': z_height,
+            'qx': 0.0,
+            'qy': 0.0,
+            'qz': 0.0,
+            'qw': 1.0  # No rotation quaternion
+        }
+        return [pose]
+    
+    pose_route = []
+    
+    for i in range(len(route)):
+        lat, lon = route[i]
+        
+        # Calculate orientation based on direction to next point
+        if i < len(route) - 1:
+            # Use bearing to next point
+            bearing = calculate_bearing(route[i], route[i + 1])
+        else:
+            # For last point, use bearing from previous point
+            bearing = calculate_bearing(route[i - 1], route[i])
+        
+        # Convert bearing to quaternion
+        qx, qy, qz, qw = yaw_to_quaternion(bearing)
+        
+        pose = {
+            'x': lon,  # Using longitude as x coordinate
+            'y': lat,  # Using latitude as y coordinate  
+            'z': z_height,
+            'qx': qx,
+            'qy': qy,
+            'qz': qz,
+            'qw': qw
+        }
+        
+        pose_route.append(pose)
+    
+    return pose_route
+
+def export_pose_route_csv(pose_route, filename):
+    """
+    Export pose route data to CSV with columns: x, y, z, qx, qy, qz, qw
+    """
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    
+    df = pd.DataFrame(pose_route)
+    df.to_csv(filename, index=False)
+    
+    return filename
 
 def load_waypoints_bis(filepath="data/points.geojson"):
     """
@@ -574,21 +667,56 @@ def main():
     m.save(map_output)
     print(f"\nMap with dual options and points saved to {map_output}")
 
-    # --- New: Export both CSVs ---
-    # 1. Road Route CSV
+    # --- Generate routes with pose information ---
+    print("\n--- Generating Routes with Pose Information ---")
+    
+    # Convert routes to pose format
+    road_pose_route = add_pose_data(road_route)
+    direct_pose_route = add_pose_data(direct_route)
+    cost_pose_route = add_pose_data(cost_route)
+
+    # --- Export pose routes to CSV ---
+    os.makedirs("routes", exist_ok=True)
+    
+    # 1. Road Route with poses
+    road_pose_csv = os.path.join("routes", "route_road_osmnx_poses.csv")
+    export_pose_route_csv(road_pose_route, road_pose_csv)
+    
+    # 2. Direct Route with poses
+    direct_pose_csv = os.path.join("routes", "route_direct_straight_poses.csv")
+    export_pose_route_csv(direct_pose_route, direct_pose_csv)
+    
+    # 3. Cost Route with poses
+    cost_pose_csv = os.path.join("routes", "route_costmap_astar_poses.csv")
+    export_pose_route_csv(cost_pose_route, cost_pose_csv)
+    
+    # Also export legacy lat/lon format for compatibility
     road_csv = os.path.join("routes", "route_road_osmnx.csv")
     pd.DataFrame(road_route, columns=["latitude", "longitude"]).to_csv(road_csv, index=False)
     
-    # 2. Direct Route CSV
     direct_csv = os.path.join("routes", "route_direct_straight.csv")
     pd.DataFrame(direct_route, columns=["latitude", "longitude"]).to_csv(direct_csv, index=False)
     
     cost_csv = os.path.join("routes", "route_costmap_astar.csv")
-    pd.DataFrame(cost_route, columns=["latitude","longitude"]).to_csv(cost_csv,index=False)
+    pd.DataFrame(cost_route, columns=["latitude","longitude"]).to_csv(cost_csv, index=False)
 
-    print(f"Exported Costmap Route to: {cost_csv}({len(road_route)} points)")
-    print(f"Exported Road Route to: {road_csv} ({len(road_route)} points)")
-    print(f"Exported Direct Route to: {direct_csv} ({len(direct_route)} points)")
+    # Print summary
+    print(f"\n--- Pose Routes Exported ---")
+    print(f"Costmap Route with poses: {cost_pose_csv} ({len(cost_pose_route)} points)")
+    print(f"Road Route with poses: {road_pose_csv} ({len(road_pose_route)} points)")
+    print(f"Direct Route with poses: {direct_pose_csv} ({len(direct_pose_route)} points)")
+    
+    print(f"\n--- Legacy Lat/Lon Routes Exported ---")
+    print(f"Costmap Route: {cost_csv} ({len(cost_route)} points)")
+    print(f"Road Route: {road_csv} ({len(road_route)} points)")
+    print(f"Direct Route: {direct_csv} ({len(direct_route)} points)")
+
+    # Print sample pose data
+    if road_pose_route:
+        print(f"\n--- Sample Pose Data (Road Route) ---")
+        sample_pose = road_pose_route[0]
+        print(f"First point: x: {sample_pose['x']:.6f}, y: {sample_pose['y']:.6f}, z: {sample_pose['z']:.1f}")
+        print(f"Orientation: qx: {sample_pose['qx']:.6f}, qy: {sample_pose['qy']:.6f}, qz: {sample_pose['qz']:.6f}, qw: {sample_pose['qw']:.6f}")
 
 if __name__ == "__main__":
     main()
