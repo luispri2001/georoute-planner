@@ -25,7 +25,7 @@ from route_generation import (
     generate_robot_route,
     interpolate_points,
 )
-from waypoint_data import get_point_by_id, load_waypoints, load_waypoints_bis
+from waypoint_data import get_point_by_id, load_waypoints
 
 
 # Keep explicit re-export list for scripts that import from this module.
@@ -40,15 +40,14 @@ __all__ = [
     "get_point_by_id",
     "interpolate_points",
     "load_waypoints",
-    "load_waypoints_bis",
     "main",
     "yaw_to_quaternion",
 ]
 
 
-def main():
+def main(filepath="data/points.geojson"):
     """Generate direct, OSM, and costmap routes and export CSV/map outputs."""
-    poi_geojson = load_waypoints()
+    poi_geojson = load_waypoints(filepath=filepath)
 
     # Route order requested in the current example scenario.
     route_ids = ["water_1", "arbustivo_2", "water_2"]
