@@ -2,6 +2,8 @@
 
 import heapq
 
+from geopy import distance
+import networkx as nx
 import numpy as np
 import osmnx as ox
 
@@ -173,23 +175,74 @@ def add_osm_tracks(grid, min_lat, min_lon, resolution, center, dist):
 
 
 def generate_costmap_route(geojson, waypoints):
-    """Generate a route between ordered waypoints using costmap+A*."""
+    """Generate route using OSM when available, then A* fallback per segment."""
     grid, min_lat, min_lon, resolution = create_cost_grid(geojson, waypoints)
 
-    add_osm_tracks(grid, min_lat, min_lon, resolution, waypoints[0], 600)
+    try:
+        add_osm_tracks(grid, min_lat, min_lon, resolution, waypoints[0], 600)
+    except Exception as exc:  # pragma: no cover - external network/OSM behavior.
+        print(f"Option C: could not add OSM track costs ({exc}). Continuing with base costmap.")
     grid = apply_landcover_costs(grid, geojson, min_lat, min_lon, resolution)
 
-    full_path = []
+    full_route = []
+
+    lats = [point[0] for point in waypoints]
+    lons = [point[1] for point in waypoints]
+    center = (sum(lats) / len(lats), sum(lons) / len(lons))
+
+    max_dist = 0
+    for point in waypoints:
+        current_dist = distance.distance(center, point).m
+        if current_dist > max_dist:
+            max_dist = current_dist
+
+    dist_m = max_dist + 500
+
+    graph = None
+    osm_nodes = None
+    try:
+        print(f"Option C: fetching OSM network around center {center} with radius {dist_m}m...")
+        ox.settings.max_query_area_size = 2500000000
+        graph = ox.graph_from_point(center, dist=dist_m, network_type="walk", simplify=True)
+        osm_nodes = ox.nearest_nodes(graph, lons, lats)
+    except Exception as exc:  # pragma: no cover - external network/OSM behavior.
+        print(f"Option C: OSM network unavailable ({exc}). Using A* for all segments.")
 
     for i in range(len(waypoints) - 1):
-        start = gps_to_grid(waypoints[i][0], waypoints[i][1], min_lat, min_lon, resolution)
-        goal = gps_to_grid(waypoints[i + 1][0], waypoints[i + 1][1], min_lat, min_lon, resolution)
+        segment_route = []
+        used_osm = False
 
-        path = smooth_path(astar(grid, start, goal))
+        if graph is not None and osm_nodes is not None:
+            try:
+                path = nx.shortest_path(graph, osm_nodes[i], osm_nodes[i + 1], weight="length")
+                route_gdf = ox.routing.route_to_gdf(graph, path)
 
-        if i > 0:
-            full_path.extend(path[1:])
+                for geometry in route_gdf.geometry:
+                    if geometry.geom_type == "LineString":
+                        xs, ys = geometry.xy
+                        for lon, lat in zip(xs, ys):
+                            segment_route.append([lat, lon])
+                    elif geometry.geom_type == "MultiLineString":
+                        for part in geometry:
+                            xs, ys = part.xy
+                            for lon, lat in zip(xs, ys):
+                                segment_route.append([lat, lon])
+
+                if segment_route:
+                    used_osm = True
+            except Exception as exc:  # pragma: no cover - external network/OSM behavior.
+                print(f"Option C: segment {i + 1} OSM failed ({exc}). Falling back to A*.")
+
+        if not used_osm:
+            start = gps_to_grid(waypoints[i][0], waypoints[i][1], min_lat, min_lon, resolution)
+            goal = gps_to_grid(waypoints[i + 1][0], waypoints[i + 1][1], min_lat, min_lon, resolution)
+
+            path = smooth_path(astar(grid, start, goal))
+            segment_route = grid_to_gps(path, min_lat, min_lon, resolution)
+
+        if i > 0 and segment_route:
+            full_route.extend(segment_route[1:])
         else:
-            full_path.extend(path)
+            full_route.extend(segment_route)
 
-    return grid_to_gps(full_path, min_lat, min_lon, resolution)
+    return full_route

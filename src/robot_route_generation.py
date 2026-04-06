@@ -72,7 +72,7 @@ def main(filepath="data/points.geojson", route_ids=None):
     road_route = generate_osmnx_route(robot_waypoints, network_type="walk", interval_m=interval)
     print(f"Road Route: {len(road_route)} points, approx {round(len(road_route) * interval, 2)}m")
 
-    print("\n--- Option C: Costmap Route (A*) ---")
+    print("\n--- Option C: OSM-first Route with A* Fallback ---")
     cost_route = generate_costmap_route(poi_geojson, robot_waypoints)
     print(f"Cost Route: {len(cost_route)} points")
 
