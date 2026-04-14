@@ -84,6 +84,13 @@ Run simplified direct-route + pose export example (no OSM routing):
 python examples/generate_route_with_poses.py
 ```
 
+Convert a pose CSV to waypoint YAML or CSV, extracting yaw from the quaternion:
+
+```bash
+python examples/convert_pose_csv_to_waypoints_yaml.py --format yaml routes/robot_route_with_poses.csv routes/robot_route_waypoints.yaml
+python examples/convert_pose_csv_to_waypoints_yaml.py --format csv routes/robot_route_with_poses.csv routes/robot_route_waypoints.csv
+```
+
 Run pose generation test script:
 
 ```bash
