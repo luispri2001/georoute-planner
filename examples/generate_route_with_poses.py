@@ -10,16 +10,17 @@ import sys
 import pandas as pd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
-from robot_route_generation import (
-    add_pose_data,
-    export_pose_route_csv,
-    generate_robot_route,
-    get_point_by_id,
-    load_waypoints,
-)
 
 
 def main():
+    from robot_route_generation import (
+        add_pose_data,
+        export_pose_route_csv,
+        generate_robot_route,
+        get_point_by_id,
+        load_waypoints,
+    )
+
     print("=== Georoute Planner with Pose Information ===")
 
     # 1. Load the waypoints
@@ -33,17 +34,27 @@ def main():
     print(f"Visit order: {route_ids}")
     print(f"Waypoints: {len(robot_waypoints)}")
     for i, waypoint in enumerate(robot_waypoints):
-        print(f"  {route_ids[i]}: lat={waypoint[0]:.6f}, lon={waypoint[1]:.6f}")
+        print(
+            f"  {route_ids[i]}: "
+            f"lat={waypoint[0]:.6f}, lon={waypoint[1]:.6f}"
+        )
 
     # 3. Generate direct route (straight-line interpolation)
     interval = 10  # 10 meters between points
     print(f"\nGenerating direct route with {interval}m intervals...")
     direct_route = generate_robot_route(robot_waypoints, interval_m=interval)
-    print(f"Generated route: {len(direct_route)} points, approx {len(direct_route) * interval}m")
+    print(
+        "Generated route: "
+        f"{len(direct_route)} points, approx {len(direct_route) * interval}m"
+    )
 
     # 4. Add pose information
     print("\nAdding pose information...")
-    pose_route = add_pose_data(direct_route, z_height=0.0)
+    pose_route = add_pose_data(
+        direct_route,
+        z_height=0.0,
+        yaw_convention="enu",
+    )
     print(f"Generated poses: {len(pose_route)} points")
 
     # 5. Export routes
@@ -55,7 +66,10 @@ def main():
 
     # Export legacy format for compatibility
     legacy_csv = "routes/robot_route_legacy.csv"
-    pd.DataFrame(direct_route, columns=["latitude", "longitude"]).to_csv(legacy_csv, index=False)
+    pd.DataFrame(
+        direct_route,
+        columns=["latitude", "longitude"],
+    ).to_csv(legacy_csv, index=False)
 
     print("\n=== Routes Exported ===")
     print(f"Route with poses: {pose_csv} ({len(pose_route)} points)")
@@ -67,7 +81,11 @@ def main():
         pose = pose_route[i]
         print(f"Point {i + 1 if i >= 0 else len(pose_route)}:")
         print(f"  x: {pose['x']:.6f}, y: {pose['y']:.6f}, z: {pose['z']:.1f}")
-        print(f"  qx: {pose['qx']:.6f}, qy: {pose['qy']:.6f}, qz: {pose['qz']:.6f}, qw: {pose['qw']:.6f}")
+        print(
+            "  "
+            f"qx: {pose['qx']:.6f}, qy: {pose['qy']:.6f}, "
+            f"qz: {pose['qz']:.6f}, qw: {pose['qw']:.6f}"
+        )
 
     print("\nRoute generation with pose information completed successfully!")
 

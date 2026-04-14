@@ -97,6 +97,12 @@ Run pose generation test script:
 python examples/test_poses.py
 ```
 
+Generate a debug map to inspect per-point orientation from quaternion (yaw) vs route direction:
+
+```bash
+python examples/visualize_pose_debug.py routes/robot_route_with_poses.csv maps/pose_heading_debug.html
+```
+
 Run interactive waypoint selector UI (choose visit order visually):
 
 ```bash
